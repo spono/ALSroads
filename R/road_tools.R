@@ -77,7 +77,7 @@ road_measure = function(las, road, param)
       {
         f <- tempfile(fileext = ".las")
         lidR::writeLAS(las_slice, f)
-        message(glue::glue("Normalization impossible in segment {i}. Segment skiped with error : {e} "))
+        message(glue::glue("Normalization impossible in segment {i}. Segment skipped with error : {e} "))
         message(glue::glue("The LAS objects that caused the failure has been saved in {f}."))
       }
       return(NULL)
@@ -107,7 +107,7 @@ road_measure = function(las, road, param)
         lidR::writeLAS(nlas_slice, f)
         cat("\n")
         cat(glue::glue("Computation impossible in segment {i}. segment_road_metrics() failed with error : {e}\n"))
-        cat(glue::glue("The LAS objects that caused the failure has been saved in {f}.\n"))
+        cat(glue::glue("The LAS object that caused the failure has been saved in {f}.\n"))
         cat("\n")
       }
       return(NULL)
@@ -121,7 +121,7 @@ road_measure = function(las, road, param)
         lidR::writeLAS(nlas_slice, f)
         cat("\n")
         cat(glue::glue("Computation warning in segment {i}. segment_road_metrics() failed with error : {e}\n"))
-        cat(glue::glue("The LAS objects that caused the failure has been saved in {f}.\n"))
+        cat(glue::glue("The LAS object that caused the failure has been saved in {f}.\n"))
         cat("\n")
       }
     })
@@ -162,7 +162,7 @@ road_metrics =  function(road, segment_metrics)
   # Average percentage of point above x
   avg_percentage_above_05 <- round(mean(segment_metrics[["pzabove05"]], na.rm = TRUE), 1)
   avg_percentage_above_2 <- round(mean(segment_metrics[["pzabove2"]], na.rm = TRUE), 1)
-  avg_shoulders <- round(mean(segment_metrics[["number_accotements"]], na.rm = TRUE)/2*100, 1)
+  avg_shoulders <- round(mean(segment_metrics[["number_bankings"]], na.rm = TRUE)/2*100, 1)
 
   # Average width
   road_width <- round(mean(segment_metrics[["road_width"]], na.rm = TRUE), 1)
