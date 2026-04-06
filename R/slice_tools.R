@@ -25,7 +25,7 @@ slice_metrics = function(nlas_slice, param)
 
   # Normalize but relatively to the road only to get a flat and horizontal road
   # (Not described in the paper)
-  dtm <- lidR::grid_terrain(las_slice, pr, lidR::knnidw(), fast = TRUE, Wdegenerated = FALSE, full_raster = TRUE)
+  dtm <- lidR::rasterize_terrain(las_slice, pr, lidR::knnidw(), fast = TRUE, Wdegenerated = FALSE, full_raster = TRUE)
   road_dtm <- make_road_dtm(dtm, xc)
   road_norm_slice <- lidR::normalize_height(las_slice, road_dtm, na.rm = TRUE)
 
@@ -143,7 +143,7 @@ slice_metrics = function(nlas_slice, param)
 #' @noRd
 compute_gnd_profiles = function(road_norm_pslice, res)
 {
-  Z <- Y <-Classification <- ReturnNumber <- .N <- Xr <- NULL
+  Z <- Y <- Classification <- ReturnNumber <- .N <- Xr <- NULL
   gnd_profiles <- road_norm_pslice@data[Classification %in% c(2L, 9L),
                                         list(sdZ = fsd(Z), avgZ = mean(Z)),
                                         by = list(Xr = lidR:::round_any(Y, res))]
