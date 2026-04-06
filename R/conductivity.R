@@ -51,14 +51,14 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   }
   else if (lidR:::is_raster(dtm))
   {
-    res <- round(raster::res(dtm)[1], 2)
+    res <- round(terra::res(dtm)[1], 2)
     if (res > 1) stop("The DTM must have a resolution of 1 m or less.")
 
-    bb = lidR::st_bbox(las)
-    dtm <- raster::crop(dtm, raster::extent(bb))
+    #bb = lidR::st_bbox(las)
+    dtm <- terra::crop(dtm, terra::ext(las))
 
     if (res < 1)
-      dtm <- raster::aggregate(dtm, fact = 1/res, fun = mean)
+      dtm <- terra::aggregate(dtm, fact = 1/res, fun = mean)
   }
   else
   {
@@ -67,16 +67,16 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
 
   # plot(dtm, col = gray(1:30/30))
 
-  # Force to use raster
-  if (lidR:::raster_pkg(dtm) == "terra")
-    dtm <- raster::raster(dtm)
+  # Force to use raster --> why?
+  #if (lidR:::raster_pkg(dtm) == "terra")
+  #  dtm <- raster::raster(dtm)
 
   nlas <- lidR::normalize_height(las, dtm) |> suppressMessages() |> suppressWarnings()
 
   # Terrain metrics using the raster package (slope, roughness)
   slope <- terra::terrain(dtm, opt = c("slope"), unit = "degrees")
 
-  smoothdtm <- raster::focal(dtm, matrix(1,5,5), mean)
+  smoothdtm <- terra::focal(dtm, matrix(1,5,5), mean)
   roughdtm <- dtm - smoothdtm
   roughness <- terra::terrain(roughdtm, opt = c("roughness"))
   #plot(slope, col = gray(1:30/30))
@@ -87,7 +87,7 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   sigma_s   <- dtm
   sigma_s[] <- activation(slope[], s, "piecewise-linear", asc = FALSE)
 
-  if (display) raster::plot(sigma_s, col = viridis::viridis(25), main = "Conductivity slope")
+  if (display) terra::plot(sigma_s, col = viridis::viridis(25), main = "Conductivity slope")
   verbose("   - Slope conductivity map \n")
 
   # Roughness-based conductivity
@@ -95,19 +95,19 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   sigma_r   <- dtm
   sigma_r[] <- activation(roughness[], r, "piecewise-linear", asc = FALSE)
 
-  if (display) raster::plot(sigma_r, col = viridis::viridis(25), main = "Conductivity roughness")
+  if (display) terra::plot(sigma_r, col = viridis::viridis(25), main = "Conductivity roughness")
   verbose("   - Roughness conductivity map\n")
 
   # Edge-based conductivity
   e    <- param$conductivity$e
-  slop <- raster::as.matrix(slope)
+  slop <- terra::as.matrix(slope)
   sobl <- sobel(slop)
   sigma_e <- dtm
   sigma_e[] <- sobl
   #plot(sigma_e, col = gray(1:30/30))
   sigma_e[] <- activation(sigma_e[], e, "thresholds", asc = FALSE)
 
-  if (display) raster::plot(sigma_e, col = viridis::viridis(3), main = "Conductivity Sobel edges")
+  if (display) terra::plot(sigma_e, col = viridis::viridis(3), main = "Conductivity Sobel edges")
   verbose("   - Sobel conductivity map\n")
 
   # Intensity-based conductivity
@@ -145,13 +145,13 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
     irange <- imax - imin
     nlas@data[["Z"]] <- Z
 
-    if (display) raster::plot(irange, col = grDevices::heat.colors(20), main = "Intensity range")
+    if (display) terra::plot(irange, col = grDevices::heat.colors(20), main = "Intensity range")
 
     th <- stats::quantile(irange[], probs = q, na.rm = TRUE)
     sigma_i <- dtm
     sigma_i[] <- activation(irange[], th, "piecewise-linear", asc = FALSE)
 
-    if (display) raster::plot(sigma_i, col = viridis::viridis(20), main = "Conductivity intensity")
+    if (display) terra::plot(sigma_i, col = viridis::viridis(20), main = "Conductivity intensity")
     verbose("   - Intensity conductivity map\n")
   }
   else
@@ -162,11 +162,11 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
 
   # CHM-based conductivity
   h <- param$conductivity$h
-  chm <- lidR::grid_canopy(nlas, dtm, lidR::p2r())
+  chm <- lidR::rasterize_canopy(nlas, dtm, lidR::p2r())
   sigma_h <- dtm
   sigma_h[] <- activation(chm[], h, "piecewise-linear", asc = FALSE)
 
-  if (display) raster::plot(sigma_h, col = viridis::inferno(25), main = "Conductivity CHM")
+  if (display) terra::plot(sigma_h, col = viridis::inferno(25), main = "Conductivity CHM")
   verbose("   - CHM conductivity map\n")
 
   # Lowpoints-based conductivity
@@ -181,8 +181,8 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   sigma_lp <- dtm
   sigma_lp[] <- activation(lp[], th, "thresholds", asc = FALSE)
 
-  if (display) raster::plot(lp, col = viridis::inferno(20), main = "Number of low point")
-  if (display) raster::plot(sigma_lp, col = viridis::inferno(2), main = "Bottom layer")
+  if (display) terra::plot(lp, col = viridis::inferno(20), main = "Number of low point")
+  if (display) terra::plot(sigma_lp, col = viridis::inferno(2), main = "Bottom layer")
   verbose("   - Bottom layer conductivity map\n")
 
   # Density-based conductivity
@@ -190,12 +190,12 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   q <- param$conductivity$d
 
   gnd <- lidR::filter_ground(nlas)
-  d   <- lidR::grid_density(gnd, dtm)
+  d   <- lidR::rasterize_density(gnd, dtm)
   M   <- matrix(1,3,3)
   M[2,2] <- 2
-  d <- raster::focal(d, M, mean, padValue = NA, na.rm = T, pad = T)
+  d <- terra::focal(d, M, fun="mean", na.rm = T, expand = T) # , padValue = NA, pad = T
 
-  if (display) raster::plot(d, col = viridis::inferno(10), main = "Density of ground points")
+  if (display) terra::plot(d, col = viridis::inferno(10), main = "Density of ground points")
 
   val <- d[]
   val <- val[val > 0]
@@ -203,7 +203,7 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   sigma_d <- dtm
   sigma_d[] <- activation(d[], th, "piecewise-linear")
 
-  if (display)  raster::plot(sigma_d, col = viridis::inferno(25), main = "Conductivity density")
+  if (display)  terra::plot(sigma_d, col = viridis::inferno(25), main = "Conductivity density")
   verbose("   - Density conductivity map\n")
 
   # Final conductivity sigma
@@ -216,24 +216,24 @@ rasterize_conductivity.LAS <- function(las, dtm = NULL, param = alsroads_default
   smin = param$conductivity$sigma_min
   sigma[sigma < smin] = smin
 
-  if (display) raster::plot(sigma, col = viridis::inferno(25), main = "Conductivity 1m")
+  if (display) terra::plot(sigma, col = viridis::inferno(25), main = "Conductivity 1m")
   verbose("   - Global conductivity map\n")
 
   # The output is sigma but we can also return everything to illustrate the paper
   if (!return_all & return_stack) {
-    out <- raster::stack(sigma)
+    out <- c(sigma)
     names(out) <- "conductivity"
   } else if (!return_all & !return_stack) {
     out <- sigma
   } else {
-    out <- raster::stack(slope, roughness, sigma_s, sigma_r, sigma_e, chm, sigma_h, d, sigma_d, irange, sigma_i, sigma_lp, sigma)
+    out <- c(slope, roughness, sigma_s, sigma_r, sigma_e, chm, sigma_h, d, sigma_d, irange, sigma_i, sigma_lp, sigma)
     names(out) <- c("slope", "roughness", "conductivity_slope", "conductivity_roughness", "conductivity_edge", "chm", "conductivity_chm", "density", "conductivity_density", "intensity", "conductivity_intensity", "conductivity_bottom", "conductivity")
   }
 
   if (!no_aggregate)
-    out <- raster::aggregate(out, fact = 2, fun = mean, na.rm = TRUE)
+    out <- terra::aggregate(out, fact = 2, fun = mean, na.rm = TRUE)
 
-  if (display) raster::plot(out, col = viridis::inferno(15), main = "Conductivity 2m")
+  if (display) terra::plot(out, col = viridis::inferno(15), main = "Conductivity 2m")
 
   if (pkg == "terra")
     out <- terra::rast(out)
