@@ -27,16 +27,16 @@ least_cost_path = function(las, centerline, dtm, conductivity, water, param)
   # If the resolution is less than 2 meter, abort.
   if (inherits(conductivity, "RasterLayer"))
   {
-    conductivity <- raster::crop(conductivity, hold)
-    conductivity <- raster::mask(conductivity, hold)
+    conductivity <- terra::crop(conductivity, hold)
+    conductivity <- terra::mask(conductivity, hold)
 
-    res <- round(raster::res(conductivity)[1], 2)
+    res <- round(terra::res(conductivity)[1], 2)
 
     if (res > 2)
       stop("The conductivity must have a resolution of 1 m or less.")
 
     if (res < 2)
-      conductivity <- raster::aggregate(conductivity, fact = 2/res, fun = mean, na.rm = TRUE)
+      conductivity <- terra::aggregate(conductivity, fact = 2/res, fun = mean, na.rm = TRUE)
   }
 
   if (is.character(conductivity) && conductivity == "v2")
@@ -65,18 +65,18 @@ least_cost_path = function(las, centerline, dtm, conductivity, water, param)
     water <- sf::st_crop(water, bbox)
     bridge <- sf::st_intersection(sf::st_geometry(centerline), water)
     if (length(bridge) > 0) bridge <- sf::st_buffer(bridge, 5)
-    if (length(water)  > 0) conductivity <- raster::mask(conductivity, sf::as_Spatial(water), inverse = TRUE)
+    if (length(water)  > 0) conductivity <- terra::mask(conductivity, sf::as_Spatial(water), inverse = TRUE)
   }
 
   if (length(bridge) > 0)
   {
-    cells <- raster::cellFromPolygon(conductivity, sf::as_Spatial(bridge))
+    cells <- terra::cells( conductivity, sf::as_Spatial(bridge) )
     cells <- unlist(cells)
     tmp   <- conductivity
     tmp[cells] <- 1
     conductivity <- tmp
 
-    if (display) raster::plot(conductivity, col = viridis::inferno(15), main = "Conductivity 1m with bridge")
+    if (display) terra::plot(conductivity, col = viridis::inferno(15), main = "Conductivity 1m with bridge")
   }
 
   # Compute low resolution conductivity with mask
@@ -114,11 +114,11 @@ mask_conductivity <- function(conductivity, centerline, param)
   bb_hull <- sf::st_bbox(hull)
   bb_cond <- sf::st_bbox(conductivity)
   if (bb_hull[1] < bb_cond[1] | bb_hull[2] < bb_cond[2] | bb_hull[3] > bb_cond[3] | bb_hull[4] > bb_cond[4])
-    conductivity = raster::extend(conductivity, bb_hull)
+    conductivity = terra::extend(conductivity, bb_hull)
 
-  conductivity <- raster::mask(conductivity, hull)
+  conductivity <- terra::mask(conductivity, hull)
 
-  if (getOption("ALSroads.debug.finding")) raster::plot(conductivity, col = viridis::inferno(15), main = "Conductivity 2m")
+  if (getOption("ALSroads.debug.finding")) terra::plot(conductivity, col = viridis::inferno(15), main = "Conductivity 2m")
   verbose("   - Masking\n")
 
   # Penalty factor based on distance-to-road.
@@ -126,22 +126,22 @@ mask_conductivity <- function(conductivity, centerline, param)
   # Could maybe be removed. Yet it might be useful if putting more constraints
   p <- sf::st_buffer(centerline, 1)
   f <- fasterize::fasterize(p, conductivity)
-  f <- raster::distance(f)
-  f <- raster::mask(f, hull)
+  f <- terra::distance(f)
+  f <- terra::mask(f, hull)
   fmin <- min(f[], na.rm = T)
   fmax <- max(f[], na.rm = T)
   target_min <- 1-param[["constraint"]][["confidence"]]
   f <- (1-(((f - fmin) * (1 - target_min)) / (fmax - fmin)))
   conductivity <- f*conductivity
 
-  if (getOption("ALSroads.debug.finding")) raster::plot(f, col = viridis::viridis(25), main = "Distance factor")
+  if (getOption("ALSroads.debug.finding")) terra::plot(f, col = viridis::viridis(25), main = "Distance factor")
   verbose("   - Road rasterization and distance factor map\n")
 
   # Set a conductivity of 1 in the caps and 0 on the outer half ring link in figure 6
   # We could use raster::cellFromPolygon but it is slow. This workaround using lidR is complex but fast.
   # Maybe using terra we could simplify the code.
   caps <- make_caps(centerline, param)
-  xy <- raster::xyFromCell(conductivity, 1: raster::ncell(conductivity))
+  xy <- terra::xyFromCell(conductivity, 1: terra::ncell(conductivity))
   xy <- as.data.frame(xy)
   xy$z <- 0
   names(xy) <- c("X", "Y", "Z")
@@ -155,7 +155,7 @@ mask_conductivity <- function(conductivity, centerline, param)
   conductivity[res] <- 0
   conductivity[is.nan(conductivity)] <- NA
 
-  if (getOption("ALSroads.debug.finding")) raster::plot(conductivity, col = viridis::inferno(15), main = "Conductivity with end caps")
+  if (getOption("ALSroads.debug.finding")) terra::plot(conductivity, col = viridis::inferno(15), main = "Conductivity with end caps")
   verbose("   - Add full conductivity end blocks\n")
 
   return(conductivity)
@@ -188,7 +188,7 @@ transition <- function(conductivity, directions = 8, geocorrection = TRUE)
   else if (methods::is(x, "SpatRaster"))
   {
     bb = terra::ext(x)
-    bb = raster::extent(bb[1:4])
+    bb = raster::extent(bb[1:4]) ## why ??
     ncells = terra::ncell(x)
     val = terra::values(x)[,1]
     use_terra = TRUE
@@ -204,7 +204,7 @@ transition <- function(conductivity, directions = 8, geocorrection = TRUE)
             nrows=as.integer(nrow(x)),
             ncols=as.integer(ncol(x)),
             extent=bb,
-            crs=sp::CRS(),
+            crs=sf::st_crs(),
             transitionMatrix = Matrix::Matrix(0, ncells,ncells),
             transitionCells = 1:ncells)
 
@@ -281,7 +281,7 @@ find_path = function(trans, centerline, A, B, param)
 
 sobel <- function(img, ker = 3) UseMethod("sobel", img)
 
-sobel.RasterLayer <- function(img, ker = 3)
+sobel.RasterLayer <- function(img, ker = 3) # why not for the SpatRaster?
 {
   slop <- raster::as.matrix(img)
   img[] <- sobel.matrix(slop, ker)
